@@ -1,190 +1,135 @@
-# ServiceHub Infrastructure - Phase 1: Reusable Terraform Modules
+# ServiceHub: Secure, Scalable Infrastructure with Terraform
 
-## Overview
-Production-grade, modular Terraform infrastructure for deploying ServiceHub on AWS. This infrastructure demonstrates enterprise best practices including:
+> **A production-grade three-tier AWS platform — Multi-AZ networking, chained security groups, IAM-based least privilege, and self-healing Auto Scaling, all defined as code**
 
-- **Modular Design**: Reusable modules for each component
-- **Multi-Environment Support**: Dev, Staging, Production with workspace isolation
-- **Security Best Practices**: Least privilege, encryption, private subnets
-- **High Availability**: Multi-AZ deployment for RDS and ALB
-- **Scalability**: Auto Scaling Groups for EC2 instances
-- **Compliance**: Tagging strategy, audit logging, encryption
+[![Terraform](https://img.shields.io/badge/Terraform-844FBA?style=for-the-badge&logo=terraform&logoColor=white)](https://www.terraform.io/)
+[![AWS](https://img.shields.io/badge/AWS-EC2%20%7C%20RDS%20%7C%20ALB-FF9900?style=for-the-badge&logo=amazonaws&logoColor=white)](https://aws.amazon.com/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![Redis](https://img.shields.io/badge/Redis-DC382D?style=for-the-badge&logo=redis&logoColor=white)](https://redis.io/)
 
-## Architecture
+## 📋 Project Overview
 
-```
-Internet → Route 53 → ALB (Public Subnets)
-                       ↓
-                  EC2 Instances (Private Subnets)
-                       ↓
-                  RDS PostgreSQL (Private Subnets - Multi-AZ)
-                       ↓
-                  ElastiCache Redis (Private Subnets)
-                       ↓
-                  S3 Bucket (Attachments)
-```
+ServiceHub is a service management platform built to hit specific production targets — ~99.9% uptime, defense-in-depth security, auto-scaling under load, and a dev environment under £70/month — using a traditional three-tier architecture instead of a fully cloud-native rebuild. Every layer (network, security, compute, database, cache) is defined as reusable Terraform modules and wired together in a single environment configuration.
 
-## Module Structure
+**🚨 📖 [View Full Documentation](DOCUMENTATION.md)** for the detailed step-by-step build. 🚨
+
+🚨 The full narrative write-up is also on Medium: [Designing and Deploying a Secure, Scalable Enterprise Platform with Infrastructure as Code: PART-1](https://medium.com/@a.arale86) 🚨
+
+## 🏗️ Architecture
 
 ```
-terraform/
-├── modules/
-│   ├── vpc/                  # Custom VPC with public/private subnets
-│   ├── security-groups/      # Security groups for each tier
-│   ├── alb/                  # Application Load Balancer
-│   ├── ec2/                  # Launch templates and instances
-│   ├── rds/                  # PostgreSQL database
-│   ├── elasticache/          # Redis cache
-│   ├── s3/                   # S3 bucket for attachments
-│   └── iam/                  # IAM roles and policies
-├── environments/
-│   ├── dev/                  # Development environment
-│   ├── staging/              # Staging environment
-│   └── prod/                 # Production environment
-└── backend.tf                # Remote state configuration
+Internet
+   │
+   ▼
+Application Load Balancer (Public Subnets, 2 AZs)
+   │  ← security group: only ALB accepts 80/443 from the internet
+   ▼
+Auto Scaling Group / EC2 (Private-App Subnets, 2 AZs)
+   │  ← security group: only accepts 5000 from the ALB's SG
+   ▼
+RDS PostgreSQL (Multi-AZ capable)      ElastiCache Redis
+(Private-DB Subnets)                   (Private-DB Subnets)
+   ← both only accept traffic from the EC2 security group
 ```
 
-## Prerequisites
+**Workflow:** Internet → ALB (public subnets) → Auto Scaling Group of EC2 instances (private-app subnets, bootstrapped via `user_data`) → RDS PostgreSQL + ElastiCache Redis (private-db subnets, no internet route at all).
 
-- AWS CLI configured with appropriate credentials
-- Terraform >= 1.5.0
-- S3 bucket for remote state (create manually first)
-- DynamoDB table for state locking (create manually first)
+## 🚀 Key Features
 
-## Quick Start
+- **Multi-AZ Network Design** - `/16` VPC split into public, private-app, and private-db tiers across two Availability Zones
+- **Security Group Chaining** - each tier only trusts the specific security group above it (ALB → EC2 → RDS/Redis), never a raw CIDR range
+- **Least-Privilege IAM** - EC2 instance role scoped to one S3 bucket and a narrow Secrets Manager/SSM path, no static access keys
+- **Self-Healing Auto Scaling** - ALB health-check-driven ASG with rolling instance refresh and `OldestInstance` termination policy
+- **Zero-Touch Bootstrap** - `user_data` installs, configures, and starts the app as a systemd service on first boot — no manual server setup
+- **Encrypted, Locked Remote State** - S3 backend with versioning + encryption, DynamoDB table for state locking
+- **IMDSv2 Enforced** - launch template requires session tokens, closing the SSRF-to-credential-theft path
 
-### 1. Create Backend Resources
+## 🛠️ Technologies
 
-```bash
-# Create S3 bucket for Terraform state
-aws s3 mb s3://servicehub-terraform-state-<your-account-id> --region eu-west-2
+| Category | Technologies |
+|----------|-------------|
+| **Networking** | VPC, public/private subnets (2 AZs), NAT Gateways, VPC Flow Logs |
+| **Compute** | EC2, Launch Templates, Auto Scaling Groups, Application Load Balancer |
+| **Database / Cache** | RDS PostgreSQL 15, ElastiCache Redis |
+| **Security** | IAM roles/instance profiles, chained security groups, IMDSv2, encrypted EBS/RDS/S3 |
+| **IaC** | Terraform, reusable modules, `templatefile()`, remote S3 + DynamoDB backend |
+| **App Runtime** | Python 3.11, Flask, Gunicorn, systemd |
 
-# Enable versioning
-aws s3api put-bucket-versioning \
-  --bucket servicehub-terraform-state-<your-account-id> \
-  --versioning-configuration Status=Enabled
+## 💡 What I Learned
 
-# Create DynamoDB table for state locking
-aws dynamodb create-table \
-  --table-name servicehub-terraform-locks \
-  --attribute-definitions AttributeName=LockID,AttributeType=S \
-  --key-schema AttributeName=LockID,KeyType=HASH \
-  --billing-mode PAY_PER_REQUEST \
-  --region eu-west-2
+✅ Designing a multi-AZ VPC with clear public/private-app/private-db tiers and per-tier routing
+✅ Building reusable Terraform modules and chaining outputs across them (network → security → compute)
+✅ Configuring an Auto Scaling Group behind an ALB with health-check-based routing and rolling refresh
+✅ Bootstrapping EC2 instances automatically with `user_data` instead of manual configuration
+✅ Setting up a secure, team-safe S3 + DynamoDB backend for Terraform state
+✅ Scoping IAM roles to exactly what an application needs, instead of broad managed policies
+
+## 📁 Project Structure
+
+```
+Servicehub_AWS_terraform/
+└── terraform/
+    ├── modules/
+    │   ├── vpc/              # VPC, subnets, routing, NAT, flow logs
+    │   ├── security-groups/  # ALB / EC2 / RDS / Redis security groups
+    │   ├── iam/               # EC2 instance role + scoped policies
+    │   ├── s3/                # Attachments bucket
+    │   ├── alb/                # Load balancer, target group, health check
+    │   ├── rds/                # PostgreSQL, subnet group, parameter group
+    │   ├── elasticache/         # Redis cluster
+    │   └── ec2/                  # Launch template + Auto Scaling Group
+    └── environments/
+        └── dev/
+            ├── main.tf             # Wires every module together
+            ├── variables.tf
+            ├── outputs.tf
+            ├── backend.tf           # S3 + DynamoDB remote state
+            ├── terraform.tfvars
+            ├── user_data.sh          # EC2 bootstrap script
+            ├── setup-backend.sh       # Creates the S3/DynamoDB backend
+            └── cleanup.sh              # Tears down resources outside Terraform's reach
 ```
 
-### 2. Deploy Development Environment
+## 🔧 Key Implementation Highlights
 
-```bash
-cd environments/dev
-terraform init
-terraform workspace new dev
-terraform plan
-terraform apply
-```
+### Security Group Chain
+- ALB accepts 80/443 from the internet — the only internet-facing component
+- EC2 accepts port 5000 only from the ALB's security group
+- RDS (5432) and Redis (6379) accept traffic only from the EC2 security group — no CIDR ranges anywhere in the chain
 
-### 3. Deploy Staging Environment
+### Auto Scaling + Bootstrap
+- Launch template enforces IMDSv2 and encrypted EBS volumes
+- `user_data.sh` installs dependencies, writes runtime config from actual Terraform outputs (DB endpoint, Redis endpoint, S3 bucket), and starts the app under systemd with `Restart=always`
+- ASG uses `health_check_type = "ELB"`, so an instance that's running but failing `/health/health` gets cycled out automatically
 
-```bash
-cd environments/staging
-terraform init
-terraform workspace new staging
-terraform plan
-terraform apply
-```
+### Challenges Overcome
+- ✅ Avoided a single NAT Gateway as a shared point of failure by deploying one per AZ
+- ✅ Kept the database tier fully private — private-db subnets have no default route to the internet at all
+- ✅ Made the Terraform backend setup idempotent and account-ID-scoped so it's safe to re-run and globally unique
 
-### 4. Deploy Production Environment
+## 📚 Documentation
 
-```bash
-cd environments/prod
-terraform init
-terraform workspace new prod
-terraform plan
-terraform apply
-```
+For the complete walkthrough including:
+- The CIDR/subnet design and routing strategy per tier
+- Full Terraform code for every module
+- The `user_data` bootstrap script and health-check wiring
+- Deployment, verification, and lessons learned
 
-## Module Documentation
+**➡️ [Read the Full Documentation](DOCUMENTATION.md)**
 
-Each module contains:
-- `main.tf` - Primary resource definitions
-- `variables.tf` - Input variables with descriptions and validation
-- `outputs.tf` - Exported values for use in other modules
-- `README.md` - Detailed module documentation
+## 🤝 Connect With Me
 
-## Environment Variables
+<div align="center">
 
-Required environment variables:
-- `AWS_REGION` - AWS region (default: eu-west-2)
-- `AWS_PROFILE` - AWS CLI profile name
-- `TF_VAR_db_password` - RDS master password (sensitive)
+[![Email](https://img.shields.io/badge/Email-abdijarale%40gmail.com-D14836?style=for-the-badge&logo=gmail&logoColor=white)](mailto:abdijarale@gmail.com)
+[![GitHub](https://img.shields.io/badge/GitHub-abdiarale86-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/abdiarale86)
 
-## Cost Estimation
+</div>
 
-**Development Environment** (minimal):
-- VPC: Free
-- EC2 (t3.small): ~£15/month
-- RDS (db.t3.micro): ~£15/month
-- ALB: ~£20/month
-- ElastiCache (cache.t3.micro): ~£12/month
-- **Total: ~£62/month**
+---
 
-**Production Environment** (HA):
-- VPC: Free
-- EC2 (t3.medium × 2): ~£60/month
-- RDS (db.t3.small, Multi-AZ): ~£60/month
-- ALB: ~£20/month
-- ElastiCache (cache.t3.small): ~£25/month
-- **Total: ~£165/month**
+<div align="center">
 
-## Security Features
+**⭐ If you found this project helpful, please consider giving it a star!**
 
-- All resources in private subnets (except ALB)
-- Security groups with least privilege rules
-- Encryption at rest (RDS, S3)
-- Encryption in transit (TLS/SSL)
-- IAM roles with minimal permissions
-- No hardcoded credentials
-- VPC Flow Logs enabled
-- CloudWatch monitoring enabled
-
-## Compliance & Governance
-
-- Consistent tagging across all resources
-- Resource naming conventions
-- Audit logging via CloudTrail
-- Access logging for ALB and S3
-- Backup policies for RDS
-
-## Disaster Recovery
-
-- RDS automated backups (7-day retention)
-- RDS Multi-AZ deployment in production
-- S3 versioning enabled
-- Cross-region replication (production only)
-
-## Troubleshooting
-
-Common issues and solutions:
-
-1. **State Lock Error**
-   ```bash
-   terraform force-unlock <LOCK_ID>
-   ```
-
-2. **RDS Deletion Protection**
-   - Set `deletion_protection = false` in RDS module before destroying
-
-3. **Terraform State**
-   - Always commit tfstate to remote backend
-   - Never commit tfstate to git
-
-## Next Steps (Phase 2)
-
-After infrastructure is deployed:
-1. Configure EC2 instances with Ansible
-2. Deploy application code
-3. Set up monitoring and logging
-4. Implement CI/CD pipeline
-
-## License
-MIT License
+</div>
