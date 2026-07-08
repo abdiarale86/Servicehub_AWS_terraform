@@ -59,10 +59,15 @@ RDS PostgreSQL (Multi-AZ capable)      ElastiCache Redis
 ## 💡 What I Learned
 
 ✅ Designing a multi-AZ VPC with clear public/private-app/private-db tiers and per-tier routing
+
 ✅ Building reusable Terraform modules and chaining outputs across them (network → security → compute)
+
 ✅ Configuring an Auto Scaling Group behind an ALB with health-check-based routing and rolling refresh
+
 ✅ Bootstrapping EC2 instances automatically with `user_data` instead of manual configuration
+
 ✅ Setting up a secure, team-safe S3 + DynamoDB backend for Terraform state
+
 ✅ Scoping IAM roles to exactly what an application needs, instead of broad managed policies
 
 ## 📁 Project Structure
