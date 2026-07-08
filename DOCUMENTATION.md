@@ -1,4 +1,5 @@
 # Designing and Deploying a Secure, Scalable Enterprise Platform with Infrastructure as Code
+<img width="700" height="574" alt="image" src="https://github.com/user-attachments/assets/64ef9ba9-b1c0-43dd-a033-35dde280f7b7" />
 
 ## 📌 Current Situation / Challenge
 
@@ -33,6 +34,7 @@ Through this project, I aimed to strengthen my skills in:
 - Setting up a secure, team-safe S3 + DynamoDB backend for Terraform state
 
 ## 🛠️ Project Tasks
+<img width="562" height="185" alt="image" src="https://github.com/user-attachments/assets/f5d233c6-cbb6-46c0-941e-8948b4285ebc" />
 
 **1. Design the Network**
 - Plan a `/16` VPC with distinct public, private-app, and private-db subnet tiers across two AZs
