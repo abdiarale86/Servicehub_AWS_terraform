@@ -1,4 +1,5 @@
 # ServiceHub: Secure, Scalable Infrastructure with Terraform
+<img width="700" height="574" alt="image" src="https://github.com/user-attachments/assets/7d5166de-f2ef-48a9-9668-0ba9168603c1" />
 
 > **A production-grade three-tier AWS platform — Multi-AZ networking, chained security groups, IAM-based least privilege, and self-healing Auto Scaling, all defined as code**
 
